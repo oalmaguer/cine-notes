@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Film, Clapperboard, LogOut, Settings } from "lucide-react";
+import { Film, Clapperboard, LogOut } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { MovieSearch } from "@/components/MovieSearch";
 import { MovieCard } from "@/components/MovieCard";
 import { MovieDetail } from "@/components/MovieDetail";
-import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
 import { LoginPage } from "@/components/LoginPage";
+import { ProfilePage } from "@/components/ProfilePage";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { TMDBMovie, getPosterUrl } from "@/lib/tmdb";
@@ -22,11 +22,10 @@ interface DBMovie {
 }
 
 const Index = () => {
-  const { user, loading: authLoading, signOut } = useAuth();
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem("tmdb_api_key") || "");
+  const { user, profile, loading: authLoading, signOut } = useAuth();
   const [movies, setMovies] = useState<DBMovie[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<DBMovie | null>(null);
-  const [showApiSettings, setShowApiSettings] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const fetchMovies = useCallback(async () => {
     if (!user) return;
@@ -42,12 +41,6 @@ const Index = () => {
   }, [user, fetchMovies]);
 
   const watchedTmdbIds = useMemo(() => new Set(movies.map((m) => m.tmdb_id)), [movies]);
-
-  const handleSaveKey = (key: string) => {
-    localStorage.setItem("tmdb_api_key", key);
-    setApiKey(key);
-    setShowApiSettings(false);
-  };
 
   const handleAdd = async (movie: TMDBMovie, rating: number) => {
     if (!user) return;
@@ -86,14 +79,6 @@ const Index = () => {
 
   if (!user) return <LoginPage />;
 
-  if (!apiKey || showApiSettings) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <ApiKeyPrompt onSave={handleSaveKey} />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-6xl mx-auto space-y-8">
       {/* Header */}
@@ -112,8 +97,18 @@ const Index = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowApiSettings(true)} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-            <Settings size={18} />
+          {/* Profile avatar button */}
+          <button
+            onClick={() => setShowProfile(true)}
+            className="w-8 h-8 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center hover:ring-2 hover:ring-primary/40 transition-all"
+          >
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="profile" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xs font-bold text-primary">
+                {(profile?.display_name || user?.email || "?").slice(0, 2).toUpperCase()}
+              </span>
+            )}
           </button>
           <button onClick={signOut} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
             <LogOut size={18} />
@@ -157,6 +152,11 @@ const Index = () => {
           onRate={handleRate}
         />
       )}
+
+      {/* Profile Modal */}
+      <AnimatePresence>
+        {showProfile && <ProfilePage onClose={() => setShowProfile(false)} />}
+      </AnimatePresence>
     </div>
   );
 };

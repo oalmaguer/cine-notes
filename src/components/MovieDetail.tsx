@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { X, Film, Clock, Star, MessageSquare, Send, Trash2 } from "lucide-react";
+import { X, Film, Clock, Star, MessageSquare, Send, Trash2, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getMovieDetails, TMDBMovieDetail, getPosterUrl, getProfileUrl } from "@/lib/tmdb";
 import { StarRating } from "./StarRating";
@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 interface MovieDetailProps {
   tmdbId: number;
-  movieDbId: string; // our DB id
+  movieDbId: string;
   userRating: number;
   onClose: () => void;
   onRate: (id: string, rating: number) => void;
@@ -18,6 +18,12 @@ interface Comment {
   id: string;
   content: string;
   created_at: string;
+  user_id: string;
+  profiles: {
+    display_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+  } | null;
 }
 
 export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate }: MovieDetailProps) {
@@ -29,12 +35,32 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate }: 
   const [submitting, setSubmitting] = useState(false);
 
   const fetchComments = useCallback(async () => {
-    const { data } = await supabase
+    const { data: commentRows } = await supabase
       .from("movie_comments")
-      .select("id, content, created_at")
+      .select("id, content, created_at, user_id")
       .eq("movie_id", movieDbId)
       .order("created_at", { ascending: false });
-    setComments(data || []);
+
+    if (!commentRows || commentRows.length === 0) {
+      setComments([]);
+      return;
+    }
+
+    // Batch-fetch profiles for all commenters in one query
+    const userIds = [...new Set(commentRows.map((c) => c.user_id))];
+    const { data: profileRows } = await supabase
+      .from("profiles")
+      .select("id, display_name, username, avatar_url")
+      .in("id", userIds);
+
+    const profileMap = new Map((profileRows ?? []).map((p) => [p.id, p]));
+
+    setComments(
+      commentRows.map((c) => ({
+        ...c,
+        profiles: profileMap.get(c.user_id) ?? null,
+      }))
+    );
   }, [movieDbId]);
 
   useEffect(() => {
@@ -62,6 +88,17 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate }: 
 
   const director = detail?.credits?.crew.find((c) => c.job === "Director");
   const cast = detail?.credits?.cast.slice(0, 12) || [];
+
+  const getCommentAuthor = (comment: Comment) => {
+    if (comment.profiles?.display_name) return comment.profiles.display_name;
+    if (comment.profiles?.username) return `@${comment.profiles.username}`;
+    return "Anonymous";
+  };
+
+  const getCommentAvatar = (comment: Comment) => {
+    const name = comment.profiles?.display_name || comment.profiles?.username || "?";
+    return { url: comment.profiles?.avatar_url, initials: name.slice(0, 2).toUpperCase() };
+  };
 
   return (
     <AnimatePresence>
@@ -177,22 +214,40 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate }: 
                   </button>
                 </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin">
-                  {comments.map((c) => (
-                    <div key={c.id} className="group flex items-start gap-2 bg-muted/50 rounded-lg p-3">
-                      <p className="text-sm text-foreground flex-1">{c.content}</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                          {new Date(c.created_at).toLocaleDateString()}
-                        </span>
-                        <button
-                          onClick={() => handleDeleteComment(c.id)}
-                          className="opacity-0 group-hover:opacity-100 text-destructive transition-opacity"
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                  {comments.map((c) => {
+                    const { url, initials } = getCommentAvatar(c);
+                    const isOwn = c.user_id === user?.id;
+                    return (
+                      <div key={c.id} className="group flex items-start gap-2.5 bg-muted/50 rounded-lg p-3">
+                        {/* Avatar */}
+                        <div className="w-7 h-7 rounded-full overflow-hidden bg-primary/10 flex-shrink-0 flex items-center justify-center">
+                          {url ? (
+                            <img src={url} alt={initials} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[10px] font-semibold text-primary">{initials}</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline gap-2 mb-0.5">
+                            <span className="text-xs font-semibold text-foreground">{getCommentAuthor(c)}</span>
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              {new Date(c.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          {/* Note: always use text content, never dangerouslySetInnerHTML */}
+                          <p className="text-sm text-foreground">{c.content}</p>
+                        </div>
+                        {isOwn && (
+                          <button
+                            onClick={() => handleDeleteComment(c.id)}
+                            className="opacity-0 group-hover:opacity-100 text-destructive transition-opacity flex-shrink-0 mt-0.5"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>

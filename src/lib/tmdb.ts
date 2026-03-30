@@ -1,5 +1,7 @@
-const BASE_URL = "https://api.themoviedb.org/3";
 const IMG_BASE = "https://image.tmdb.org/t/p";
+
+// Edge Function URL — all TMDB calls go through the server, key never exposed to browser
+const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tmdb-proxy`;
 
 export interface TMDBMovie {
   id: number;
@@ -46,30 +48,26 @@ export const getPosterUrl = (path: string | null, size: "w200" | "w500" = "w500"
 export const getProfileUrl = (path: string | null) =>
   path ? `${IMG_BASE}/w185${path}` : null;
 
-function getApiKey(): string {
-  return localStorage.getItem("tmdb_api_key") || "";
+
+async function proxyFetch(path: string, params: Record<string, string> = {}): Promise<Response> {
+  const url = new URL(PROXY_URL);
+  url.searchParams.set("path", path);
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set(k, v);
+  }
+  return fetch(url.toString());
 }
 
 export async function searchMovies(query: string): Promise<TMDBMovie[]> {
   if (!query.trim()) return [];
-  const apiKey = getApiKey();
-  if (!apiKey) return [];
-
-  const res = await fetch(
-    `${BASE_URL}/search/movie?api_key=${apiKey}&query=${encodeURIComponent(query)}&page=1`
-  );
+  const res = await proxyFetch("/search/movie", { query });
   if (!res.ok) throw new Error("TMDB search failed");
   const data = await res.json();
   return data.results?.slice(0, 8) ?? [];
 }
 
 export async function getMovieDetails(tmdbId: number): Promise<TMDBMovieDetail | null> {
-  const apiKey = getApiKey();
-  if (!apiKey) return null;
-
-  const res = await fetch(
-    `${BASE_URL}/movie/${tmdbId}?api_key=${apiKey}&append_to_response=credits`
-  );
+  const res = await proxyFetch(`/movie/${tmdbId}`, { append_to_response: "credits" });
   if (!res.ok) return null;
   return res.json();
 }
