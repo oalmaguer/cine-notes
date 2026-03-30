@@ -66,6 +66,42 @@ export async function searchMovies(query: string): Promise<TMDBMovie[]> {
   return data.results?.slice(0, 8) ?? [];
 }
 
+export interface TMDBPerson {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  known_for_department: string;
+  popularity: number;
+}
+
+export async function searchPerson(query: string): Promise<TMDBPerson[]> {
+  if (!query.trim()) return [];
+  const res = await proxyFetch("/search/person", { query });
+  if (!res.ok) throw new Error("TMDB person search failed");
+  const data = await res.json();
+  return data.results?.slice(0, 5) ?? [];
+}
+
+export async function getPersonMovies(personId: number): Promise<TMDBMovie[]> {
+  const res = await proxyFetch(`/person/${personId}/movie_credits`);
+  if (!res.ok) throw new Error("TMDB person credits failed");
+  const data = await res.json();
+  // Combine cast + crew movies, deduplicate, sort by popularity
+  const castMovies: TMDBMovie[] = data.cast ?? [];
+  const crewMovies: TMDBMovie[] = data.crew ?? [];
+  const seen = new Set<number>();
+  const all: TMDBMovie[] = [];
+  for (const m of [...castMovies, ...crewMovies]) {
+    if (!seen.has(m.id) && m.poster_path) {
+      seen.add(m.id);
+      all.push(m);
+    }
+  }
+  return all
+    .sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0))
+    .slice(0, 20);
+}
+
 export async function getMovieDetails(tmdbId: number): Promise<TMDBMovieDetail | null> {
   const res = await proxyFetch(`/movie/${tmdbId}`, { append_to_response: "credits" });
   if (!res.ok) return null;
