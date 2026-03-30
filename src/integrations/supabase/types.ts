@@ -14,7 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      movie_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          movie_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          movie_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          movie_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movie_comments_movie_id_fkey"
+            columns: ["movie_id"]
+            isOneToOne: false
+            referencedRelation: "watched_movies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watched_movies: {
+        Row: {
+          created_at: string
+          id: string
+          overview: string | null
+          poster_url: string | null
+          release_date: string | null
+          title: string
+          tmdb_id: number
+          tmdb_rating: number | null
+          updated_at: string
+          user_id: string
+          user_rating: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          overview?: string | null
+          poster_url?: string | null
+          release_date?: string | null
+          title: string
+          tmdb_id: number
+          tmdb_rating?: number | null
+          updated_at?: string
+          user_id: string
+          user_rating?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          overview?: string | null
+          poster_url?: string | null
+          release_date?: string | null
+          title?: string
+          tmdb_id?: number
+          tmdb_rating?: number | null
+          updated_at?: string
+          user_id?: string
+          user_rating?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
