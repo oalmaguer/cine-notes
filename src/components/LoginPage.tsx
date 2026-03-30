@@ -7,7 +7,10 @@ export function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: window.location.origin,
+        // Must include the hash so HashRouter loads the root route,
+        // allowing Supabase's JS SDK to detect and consume the
+        // access_token/refresh_token from the URL fragment.
+        redirectTo: `${window.location.origin}${window.location.pathname}`,
       },
     });
   };
