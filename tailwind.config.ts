@@ -47,6 +47,9 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        "surface-hover": "hsl(var(--surface-hover))",
+        "star-filled": "hsl(var(--star-filled))",
+        "star-empty": "hsl(var(--star-empty))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
