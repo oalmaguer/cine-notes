@@ -49,13 +49,20 @@ export const getProfileUrl = (path: string | null) =>
   path ? `${IMG_BASE}/w185${path}` : null;
 
 
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
 async function proxyFetch(path: string, params: Record<string, string> = {}): Promise<Response> {
   const url = new URL(PROXY_URL);
   url.searchParams.set("path", path);
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, v);
   }
-  return fetch(url.toString());
+  return fetch(url.toString(), {
+    headers: {
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+  });
 }
 
 export async function searchMovies(query: string): Promise<TMDBMovie[]> {
