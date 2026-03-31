@@ -26,6 +26,7 @@ const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useAuth();
   const [movies, setMovies] = useState<DBMovie[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<DBMovie | null>(null);
+  const [previewTmdbMovie, setPreviewTmdbMovie] = useState<TMDBMovie | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [viewMode, setViewMode] = useState<"watched" | "watchlist">("watched");
 
@@ -131,8 +132,12 @@ const Index = () => {
         </div>
       </motion.header>
 
-      {/* Search */}
-      <MovieSearch onAdd={handleAdd} watchedIds={watchedTmdbIds} watchlistIds={watchlistTmdbIds} />
+      <MovieSearch 
+        onAdd={handleAdd} 
+        watchedIds={watchedTmdbIds} 
+        watchlistIds={watchlistTmdbIds} 
+        onPreview={setPreviewTmdbMovie}
+      />
 
       {/* Toggle */}
       <div className="flex justify-center mb-6">
@@ -195,6 +200,21 @@ const Index = () => {
           onAdd={handleAdd}
           watchedIds={watchedTmdbIds}
           watchlistIds={watchlistTmdbIds}
+          onPreview={setPreviewTmdbMovie}
+        />
+      )}
+
+      {/* Preview Modal for unsaved movies */}
+      {previewTmdbMovie && (
+        <MovieDetail
+          tmdbId={previewTmdbMovie.id}
+          userRating={0}
+          onClose={() => setPreviewTmdbMovie(null)}
+          onRate={handleRate}
+          onAdd={handleAdd}
+          watchedIds={watchedTmdbIds}
+          watchlistIds={watchlistTmdbIds}
+          onPreview={setPreviewTmdbMovie}
         />
       )}
 

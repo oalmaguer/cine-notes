@@ -11,11 +11,18 @@ import {
   getProfileUrl,
 } from "@/lib/tmdb";
 import { StarRating } from "./StarRating";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface MovieSearchProps {
   onAdd: (movie: TMDBMovie, rating: number, has_watched: boolean) => void;
   watchedIds: Set<number>;
   watchlistIds: Set<number>;
+  onPreview?: (movie: TMDBMovie) => void;
 }
 
 type Mode = "movie" | "actor";
@@ -25,7 +32,7 @@ interface SelectedActor {
   movies: TMDBMovie[];
 }
 
-export function MovieSearch({ onAdd, watchedIds, watchlistIds }: MovieSearchProps) {
+export function MovieSearch({ onAdd, watchedIds, watchlistIds, onPreview }: MovieSearchProps) {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<Mode>("movie");
   const [movieResults, setMovieResults] = useState<TMDBMovie[]>([]);
@@ -151,6 +158,7 @@ export function MovieSearch({ onAdd, watchedIds, watchlistIds }: MovieSearchProp
     (mode === "actor" && actorResults.length > 0);
 
   return (
+    <TooltipProvider delayDuration={400}>
     <div ref={containerRef} className="relative w-full max-w-xl mx-auto">
       {/* Actor filmography view */}
       <AnimatePresence>
@@ -200,58 +208,65 @@ export function MovieSearch({ onAdd, watchedIds, watchlistIds }: MovieSearchProp
                   const alreadyAdded = watchedIds.has(movie.id);
                   const alreadyWatchlisted = watchlistIds.has(movie.id);
                   return (
-                    <div
-                      key={movie.id}
-                      className="flex items-center gap-3 p-3 hover:bg-surface-hover transition-colors border-b border-border last:border-0"
-                    >
-                      <div className="w-12 h-[72px] rounded-md overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
-                        {getPosterUrl(movie.poster_path, "w200") ? (
-                          <img
-                            src={getPosterUrl(movie.poster_path, "w200")!}
-                            alt={movie.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Film size={20} className="text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate text-foreground">{movie.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐{" "}
-                          {movie.vote_average.toFixed(1)}
-                        </p>
-                        {!alreadyAdded && (
-                          <div className="mt-1">
-                            <StarRating
-                              rating={selectedRating[movie.id] || 0}
-                              onRate={(r) =>
-                                setSelectedRating((p) => ({ ...p, [movie.id]: r }))
-                              }
-                              size={14}
-                            />
+                    <Tooltip key={movie.id}>
+                      <TooltipTrigger asChild>
+                        <div
+                          onClick={() => onPreview?.(movie)}
+                          className="flex items-center gap-3 p-3 hover:bg-surface-hover transition-colors border-b border-border last:border-0 cursor-pointer"
+                        >
+                          <div className="w-12 h-[72px] rounded-md overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
+                            {getPosterUrl(movie.poster_path, "w200") ? (
+                              <img
+                                src={getPosterUrl(movie.poster_path, "w200")!}
+                                alt={movie.title}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <Film size={20} className="text-muted-foreground" />
+                            )}
                           </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-1.5 flex-shrink-0">
-                        <button
-                          onClick={() => handleAddWatchlist(movie)}
-                          disabled={alreadyWatchlisted || alreadyAdded}
-                          title="Want to Watch"
-                          className="p-1.5 rounded-lg bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <BookmarkPlus size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleAddWatched(movie)}
-                          disabled={alreadyAdded}
-                          title="Mark as Watched"
-                          className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <Check size={16} />
-                        </button>
-                      </div>
-                    </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate text-foreground">{movie.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐{" "}
+                              {movie.vote_average.toFixed(1)}
+                            </p>
+                            {!alreadyAdded && (
+                              <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                                <StarRating
+                                  rating={selectedRating[movie.id] || 0}
+                                  onRate={(r) =>
+                                    setSelectedRating((p) => ({ ...p, [movie.id]: r }))
+                                  }
+                                  size={14}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => handleAddWatchlist(movie)}
+                              disabled={alreadyWatchlisted || alreadyAdded}
+                              title="Want to Watch"
+                              className="p-1.5 rounded-lg bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <BookmarkPlus size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleAddWatched(movie)}
+                              disabled={alreadyAdded}
+                              title="Mark as Watched"
+                              className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <Check size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-xs z-[60]">
+                        <p className="text-sm">{movie.overview || "No description available."}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   );
                 })
               )}
@@ -352,63 +367,71 @@ export function MovieSearch({ onAdd, watchedIds, watchlistIds }: MovieSearchProp
                 const alreadyAdded = watchedIds.has(movie.id);
                 const alreadyWatchlisted = watchlistIds.has(movie.id);
                 return (
-                  <div
-                    key={movie.id}
-                    className="flex items-center gap-3 p-3 hover:bg-surface-hover transition-colors border-b border-border last:border-0"
-                  >
-                    <div className="w-12 h-[72px] rounded-md overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
-                      {getPosterUrl(movie.poster_path, "w200") ? (
-                        <img
-                          src={getPosterUrl(movie.poster_path, "w200")!}
-                          alt={movie.title}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <Film size={20} className="text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate text-foreground">{movie.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐{" "}
-                        {movie.vote_average.toFixed(1)}
-                      </p>
-                      {!alreadyAdded && (
-                        <div className="mt-1">
-                          <StarRating
-                            rating={selectedRating[movie.id] || 0}
-                            onRate={(r) =>
-                              setSelectedRating((p) => ({ ...p, [movie.id]: r }))
-                            }
-                            size={14}
-                          />
+                  <Tooltip key={movie.id}>
+                    <TooltipTrigger asChild>
+                      <div
+                        onClick={() => onPreview?.(movie)}
+                        className="flex items-center gap-3 p-3 hover:bg-surface-hover transition-colors border-b border-border last:border-0 cursor-pointer"
+                      >
+                        <div className="w-12 h-[72px] rounded-md overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
+                          {getPosterUrl(movie.poster_path, "w200") ? (
+                            <img
+                              src={getPosterUrl(movie.poster_path, "w200")!}
+                              alt={movie.title}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Film size={20} className="text-muted-foreground" />
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-1.5 flex-shrink-0">
-                      <button
-                        onClick={() => handleAddWatchlist(movie)}
-                        disabled={alreadyWatchlisted || alreadyAdded}
-                        title="Want to Watch"
-                        className="p-1.5 rounded-lg bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <BookmarkPlus size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleAddWatched(movie)}
-                        disabled={alreadyAdded}
-                        title="Mark as Watched"
-                        className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <Check size={16} />
-                      </button>
-                    </div>
-                  </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate text-foreground">{movie.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐{" "}
+                            {movie.vote_average.toFixed(1)}
+                          </p>
+                          {!alreadyAdded && (
+                            <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                              <StarRating
+                                rating={selectedRating[movie.id] || 0}
+                                onRate={(r) =>
+                                  setSelectedRating((p) => ({ ...p, [movie.id]: r }))
+                                }
+                                size={14}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => handleAddWatchlist(movie)}
+                            disabled={alreadyWatchlisted || alreadyAdded}
+                            title="Want to Watch"
+                            className="p-1.5 rounded-lg bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <BookmarkPlus size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleAddWatched(movie)}
+                            disabled={alreadyAdded}
+                            title="Mark as Watched"
+                            className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Check size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs z-[60]">
+                      <p className="text-sm">{movie.overview || "No description available."}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 );
               })}
           </motion.div>
         )}
       </AnimatePresence>
     </div>
+    </TooltipProvider>
   );
 }

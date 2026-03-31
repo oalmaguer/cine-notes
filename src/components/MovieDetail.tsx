@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, Film, Clock, Star, MessageSquare, Send, Trash2, User, Sparkles, Loader2, BookmarkPlus, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getMovieDetails, TMDBMovieDetail, getPosterUrl, getProfileUrl, TMDBMovie, searchMovies, getAiRecommendations } from "@/lib/tmdb";
+import { getMovieDetails, TMDBMovieDetail, getPosterUrl, getProfileUrl, TMDBMovie, searchMovies } from "@/lib/tmdb";
 import { StarRating } from "./StarRating";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 interface MovieDetailProps {
   tmdbId: number;
-  movieDbId: string;
+  movieDbId?: string;
   userRating: number;
   onClose: () => void;
   onRate: (id: string, rating: number) => void;
@@ -16,6 +16,7 @@ interface MovieDetailProps {
   onAdd?: (movie: TMDBMovie, rating: number, has_watched: boolean) => void;
   watchedIds?: Set<number>;
   watchlistIds?: Set<number>;
+  onPreview?: (movie: TMDBMovie) => void;
 }
 
 interface Comment {
@@ -30,7 +31,14 @@ interface Comment {
   } | null;
 }
 
-export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, readonly = false, onAdd, watchedIds, watchlistIds }: MovieDetailProps) {
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, readonly = false, onAdd, watchedIds, watchlistIds, onPreview }: MovieDetailProps) {
   const { user } = useAuth();
   const [detail, setDetail] = useState<TMDBMovieDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +49,10 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
   const [isRecommending, setIsRecommending] = useState(false);
 
   const fetchComments = useCallback(async () => {
+    if (!movieDbId) {
+      setComments([]);
+      return;
+    }
     const { data: commentRows } = await supabase
       .from("movie_comments")
       .select("id, content, created_at, user_id")
@@ -194,10 +206,12 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
                     ))}
                   </div>
                   {director && <p className="text-xs text-muted-foreground pt-1">Directed by <span className="text-foreground font-medium">{director.name}</span></p>}
-                  <div className="pt-1">
-                    <p className="text-xs text-muted-foreground mb-1">{readonly ? "User's rating" : "Your rating"}</p>
-                    <StarRating rating={userRating} onRate={(r) => !readonly && onRate(movieDbId, r)} size={18} interactive={!readonly} />
-                  </div>
+                  {movieDbId && (
+                    <div className="pt-1">
+                      <p className="text-xs text-muted-foreground mb-1">{readonly ? "User's rating" : "Your rating"}</p>
+                      <StarRating rating={userRating} onRate={(r) => !readonly && onRate(movieDbId, r)} size={18} interactive={!readonly} />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -262,47 +276,56 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
                         {recommendations.length === 0 ? (
                           <div className="text-muted-foreground text-center py-2 text-xs">No recommendations found.</div>
                         ) : (
-                          <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin pr-1 mt-2">
-                            {recommendations.map((movie) => {
-                              const alreadyAdded = watchedIds?.has(movie.id);
-                              const alreadyWatchlisted = watchlistIds?.has(movie.id);
-                              return (
-                                <div key={movie.id} className="flex items-center gap-3 p-2 hover:bg-surface-hover transition-colors border border-border/50 rounded-lg bg-background/50">
-                                  <div className="w-10 h-14 rounded overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
-                                    {getPosterUrl(movie.poster_path, "w200") ? (
-                                      <img src={getPosterUrl(movie.poster_path, "w200")!} alt={movie.title} className="w-full h-full object-cover" />
-                                    ) : (
-                                      <Film size={16} className="text-muted-foreground" />
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-medium truncate text-foreground">{movie.title}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐ {movie.vote_average.toFixed(1)}
-                                    </p>
-                                  </div>
-                                  <div className="flex flex-col gap-1 flex-shrink-0">
-                                    <button
-                                      onClick={() => onAdd?.(movie, 0, false)}
-                                      disabled={alreadyWatchlisted || alreadyAdded}
-                                      title="Want to Watch"
-                                      className="p-1.5 rounded bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                      <BookmarkPlus size={14} />
-                                    </button>
-                                    <button
-                                      onClick={() => onAdd?.(movie, 3, true)}
-                                      disabled={alreadyAdded}
-                                      title="Mark as Watched"
-                                      className="p-1.5 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                      <Check size={14} />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                          <TooltipProvider delayDuration={400}>
+                            <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin pr-1 mt-2">
+                              {recommendations.map((movie) => {
+                                const alreadyAdded = watchedIds?.has(movie.id);
+                                const alreadyWatchlisted = watchlistIds?.has(movie.id);
+                                return (
+                                  <Tooltip key={movie.id}>
+                                    <TooltipTrigger asChild>
+                                      <div onClick={() => onPreview?.(movie)} className="cursor-pointer flex items-center gap-3 p-2 hover:bg-surface-hover transition-colors border border-border/50 rounded-lg bg-background/50">
+                                        <div className="w-10 h-14 rounded overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
+                                          {getPosterUrl(movie.poster_path, "w200") ? (
+                                            <img src={getPosterUrl(movie.poster_path, "w200")!} alt={movie.title} className="w-full h-full object-cover" />
+                                          ) : (
+                                            <Film size={16} className="text-muted-foreground" />
+                                          )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="font-medium truncate text-foreground">{movie.title}</p>
+                                          <p className="text-xs text-muted-foreground">
+                                            {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐ {movie.vote_average.toFixed(1)}
+                                          </p>
+                                        </div>
+                                        <div className="flex flex-col gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                          <button
+                                            onClick={() => onAdd?.(movie, 0, false)}
+                                            disabled={alreadyWatchlisted || alreadyAdded}
+                                            title="Want to Watch"
+                                            className="p-1.5 rounded bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                          >
+                                            <BookmarkPlus size={14} />
+                                          </button>
+                                          <button
+                                            onClick={() => onAdd?.(movie, 3, true)}
+                                            disabled={alreadyAdded}
+                                            title="Mark as Watched"
+                                            className="p-1.5 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                          >
+                                            <Check size={14} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right" className="max-w-xs z-[60]">
+                                      <p className="text-sm">{movie.overview || "No description available."}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                );
+                              })}
+                            </div>
+                          </TooltipProvider>
                         )}
                       </div>
                     </div>
@@ -311,10 +334,11 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
               )}
 
               {/* Comments */}
-              <div className="border-t border-border px-6 py-4 space-y-3">
-                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <MessageSquare size={14} /> Comments ({comments.length})
-                </h3>
+              {movieDbId && (
+                <div className="border-t border-border px-6 py-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <MessageSquare size={14} /> Comments ({comments.length})
+                  </h3>
                 {!readonly && (
                   <div className="flex gap-2">
                     <input
@@ -371,6 +395,7 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
                   })}
                 </div>
               </div>
+              )}
             </div>
           ) : (
             <div className="p-16 text-center text-muted-foreground">Failed to load movie details</div>
