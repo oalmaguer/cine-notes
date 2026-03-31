@@ -192,6 +192,9 @@ const Index = () => {
           userRating={selectedMovie.user_rating}
           onClose={() => setSelectedMovie(null)}
           onRate={handleRate}
+          onAdd={handleAdd}
+          watchedIds={watchedTmdbIds}
+          watchlistIds={watchlistTmdbIds}
         />
       )}
 

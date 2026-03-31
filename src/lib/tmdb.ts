@@ -49,20 +49,25 @@ export const getProfileUrl = (path: string | null) =>
   path ? `${IMG_BASE}/w185${path}` : null;
 
 
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+import { supabase } from "@/integrations/supabase/client";
 
 async function proxyFetch(path: string, params: Record<string, string> = {}): Promise<Response> {
-  const url = new URL(PROXY_URL);
-  url.searchParams.set("path", path);
-  for (const [k, v] of Object.entries(params)) {
-    url.searchParams.set(k, v);
-  }
-  return fetch(url.toString(), {
-    headers: {
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-    },
+  const queryParams = new URLSearchParams({ path, ...params });
+  
+  // We use supabase.functions.invoke to automatically hook into standard Supabase auth
+  // and completely avoid exposing the keys physically in this file. Note we still manually 
+  // extract the raw fetch response because TMDB searches expect full Response objects.
+  const { data, error } = await supabase.functions.invoke(`tmdb-proxy?${queryParams.toString()}`, {
+    method: "GET"
   });
+
+  if (error) {
+    throw new Error(`TMDB proxy failed: ${error.message}`);
+  }
+
+  // To maintain compatibility with the rest of proxyFetch callers that expect a Response
+  // object out of `fetch`, we'll return a stubbed response wrapping the JSON data.
+  return new Response(JSON.stringify(data), { status: 200 });
 }
 
 export async function searchMovies(query: string): Promise<TMDBMovie[]> {

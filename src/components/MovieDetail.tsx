@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { X, Film, Clock, Star, MessageSquare, Send, Trash2, User } from "lucide-react";
+import { X, Film, Clock, Star, MessageSquare, Send, Trash2, User, Sparkles, Loader2, BookmarkPlus, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getMovieDetails, TMDBMovieDetail, getPosterUrl, getProfileUrl } from "@/lib/tmdb";
+import { getMovieDetails, TMDBMovieDetail, getPosterUrl, getProfileUrl, TMDBMovie, searchMovies, getAiRecommendations } from "@/lib/tmdb";
 import { StarRating } from "./StarRating";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -13,6 +13,9 @@ interface MovieDetailProps {
   onClose: () => void;
   onRate: (id: string, rating: number) => void;
   readonly?: boolean;
+  onAdd?: (movie: TMDBMovie, rating: number, has_watched: boolean) => void;
+  watchedIds?: Set<number>;
+  watchlistIds?: Set<number>;
 }
 
 interface Comment {
@@ -27,13 +30,15 @@ interface Comment {
   } | null;
 }
 
-export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, readonly = false }: MovieDetailProps) {
+export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, readonly = false, onAdd, watchedIds, watchlistIds }: MovieDetailProps) {
   const { user } = useAuth();
   const [detail, setDetail] = useState<TMDBMovieDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [recommendations, setRecommendations] = useState<TMDBMovie[] | null>(null);
+  const [isRecommending, setIsRecommending] = useState(false);
 
   const fetchComments = useCallback(async () => {
     const { data: commentRows } = await supabase
@@ -85,6 +90,41 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
   const handleDeleteComment = async (id: string) => {
     await supabase.from("movie_comments").delete().eq("id", id);
     await fetchComments();
+  };
+
+  const handleGetRecommendations = async () => {
+    if (!detail) return;
+    setIsRecommending(true);
+    try {
+      const genreString = detail.genres?.map(g => g.name).join(", ");
+      const { data, error } = await supabase.functions.invoke("smart-handler", {
+        body: { movieTitle: detail.title, genres: genreString }
+      });
+
+      console.log('data', data, error);
+
+      if (error) {
+        throw new Error("Failed to get recommendations from edge function");
+      }
+      
+      const titles: string[] = data.recommendations || [];
+      
+      const matchedMovies: TMDBMovie[] = [];
+      for (const title of titles) {
+        const results = await searchMovies(title);
+        if (results && results.length > 0) {
+          // Take the most relevant search result
+          matchedMovies.push(results[0]);
+        }
+      }
+      
+      setRecommendations(matchedMovies);
+    } catch (error) {
+      console.error(error);
+      setRecommendations([]);
+    } finally {
+      setIsRecommending(false);
+    }
   };
 
   const director = detail?.credits?.crew.find((c) => c.job === "Director");
@@ -189,6 +229,84 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* AI Recommendations */}
+              {!readonly && (
+                <div className="px-6 pb-4 pt-2">
+                  {!recommendations && !isRecommending ? (
+                    <button
+                      onClick={handleGetRecommendations}
+                      className="flex items-center justify-center gap-2 w-full py-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl font-medium transition-colors border border-primary/20"
+                    >
+                      <Sparkles size={18} />
+                      Give me similar recommendations
+                    </button>
+                  ) : isRecommending ? (
+                    <div className="bg-muted/50 rounded-xl border border-border p-6 text-center">
+                      <Loader2 size={24} className="mx-auto text-primary animate-spin mb-3" />
+                      <p className="text-sm text-foreground font-medium">Finding similar movies for you...</p>
+                      <p className="text-xs text-muted-foreground mt-1">Powered by Llama 3.1 & Groq</p>
+                    </div>
+                  ) : (
+                    <div className="bg-primary/5 rounded-xl border border-primary/20 p-5 space-y-3">
+                      <div className="flex items-center justify-between border-b border-primary/10 pb-3">
+                        <div className="flex items-center gap-2 text-primary font-semibold">
+                          <Sparkles size={18} />
+                          AI Recommendations
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">Powered by Groq</p>
+                      </div>
+                      <div className="text-sm text-foreground space-y-2 leading-relaxed">
+                        {recommendations.length === 0 ? (
+                          <div className="text-muted-foreground text-center py-2 text-xs">No recommendations found.</div>
+                        ) : (
+                          <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin pr-1 mt-2">
+                            {recommendations.map((movie) => {
+                              const alreadyAdded = watchedIds?.has(movie.id);
+                              const alreadyWatchlisted = watchlistIds?.has(movie.id);
+                              return (
+                                <div key={movie.id} className="flex items-center gap-3 p-2 hover:bg-surface-hover transition-colors border border-border/50 rounded-lg bg-background/50">
+                                  <div className="w-10 h-14 rounded overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
+                                    {getPosterUrl(movie.poster_path, "w200") ? (
+                                      <img src={getPosterUrl(movie.poster_path, "w200")!} alt={movie.title} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <Film size={16} className="text-muted-foreground" />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium truncate text-foreground">{movie.title}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐ {movie.vote_average.toFixed(1)}
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-col gap-1 flex-shrink-0">
+                                    <button
+                                      onClick={() => onAdd?.(movie, 0, false)}
+                                      disabled={alreadyWatchlisted || alreadyAdded}
+                                      title="Want to Watch"
+                                      className="p-1.5 rounded bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <BookmarkPlus size={14} />
+                                    </button>
+                                    <button
+                                      onClick={() => onAdd?.(movie, 3, true)}
+                                      disabled={alreadyAdded}
+                                      title="Mark as Watched"
+                                      className="p-1.5 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <Check size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
