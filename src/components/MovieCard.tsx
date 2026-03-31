@@ -1,4 +1,4 @@
-import { Trash2, Film } from "lucide-react";
+import { Trash2, Film, Check } from "lucide-react";
 import { motion } from "framer-motion";
 import { StarRating } from "./StarRating";
 
@@ -11,14 +11,17 @@ interface MovieCardProps {
     release_date: string | null;
     tmdb_rating: number | null;
     user_rating: number;
+    has_watched: boolean;
   };
   onRemove: (id: string) => void;
   onRate: (id: string, rating: number) => void;
   onClick: () => void;
   index: number;
+  onToggleWatched?: () => void;
+  readonly?: boolean;
 }
 
-export function MovieCard({ movie, onRemove, onRate, onClick, index }: MovieCardProps) {
+export function MovieCard({ movie, onRemove, onRate, onClick, index, onToggleWatched, readonly = false }: MovieCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -41,21 +44,36 @@ export function MovieCard({ movie, onRemove, onRate, onClick, index }: MovieCard
             <Film size={40} className="text-muted-foreground" />
           </div>
         )}
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemove(movie.id); }}
-          className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 backdrop-blur-sm text-destructive opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
-        >
-          <Trash2 size={14} />
-        </button>
+        {!readonly && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(movie.id); }}
+            className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 backdrop-blur-sm text-destructive opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
-      <div className="p-3 space-y-1.5">
-        <h3 className="font-semibold text-sm truncate text-foreground">{movie.title}</h3>
-        <p className="text-xs text-muted-foreground">
-          {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐ {(movie.tmdb_rating ?? 0).toFixed(1)}
-        </p>
-        <div onClick={(e) => e.stopPropagation()}>
-          <StarRating rating={movie.user_rating} onRate={(r) => onRate(movie.id, r)} size={14} />
+      <div className="p-3 space-y-2">
+        <div>
+          <h3 className="font-semibold text-sm truncate text-foreground">{movie.title}</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐ {(movie.tmdb_rating ?? 0).toFixed(1)}
+          </p>
         </div>
+        {movie.has_watched ? (
+          <div onClick={(e) => e.stopPropagation()}>
+            <StarRating rating={movie.user_rating} onRate={(r) => !readonly && onRate(movie.id, r)} size={14} interactive={!readonly} />
+          </div>
+        ) : (
+          !readonly && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleWatched?.(); }}
+              className="flex items-center gap-1.5 text-xs text-primary bg-primary/10 hover:bg-primary/20 px-2 py-1.5 rounded-md font-medium transition-colors w-full justify-center mt-1"
+            >
+              <Check size={14} /> Mark as Watched
+            </button>
+          )
+        )}
       </div>
     </motion.div>
   );

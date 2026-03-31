@@ -19,6 +19,7 @@ interface DBMovie {
   release_date: string | null;
   tmdb_rating: number | null;
   user_rating: number;
+  has_watched: boolean;
 }
 
 const Index = () => {
@@ -26,12 +27,13 @@ const Index = () => {
   const [movies, setMovies] = useState<DBMovie[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<DBMovie | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [viewMode, setViewMode] = useState<"watched" | "watchlist">("watched");
 
   const fetchMovies = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
       .from("watched_movies")
-      .select("id, tmdb_id, title, overview, poster_url, release_date, tmdb_rating, user_rating")
+      .select("id, tmdb_id, title, overview, poster_url, release_date, tmdb_rating, user_rating, has_watched")
       .order("created_at", { ascending: false });
     setMovies((data as DBMovie[]) || []);
   }, [user]);
@@ -40,9 +42,14 @@ const Index = () => {
     if (user) fetchMovies();
   }, [user, fetchMovies]);
 
-  const watchedTmdbIds = useMemo(() => new Set(movies.map((m) => m.tmdb_id)), [movies]);
+  const watchedTmdbIds = useMemo(() => new Set(movies.filter(m => m.has_watched).map(m => m.tmdb_id)), [movies]);
+  const watchlistTmdbIds = useMemo(() => new Set(movies.filter(m => !m.has_watched).map(m => m.tmdb_id)), [movies]);
 
-  const handleAdd = async (movie: TMDBMovie, rating: number) => {
+  const filteredMovies = useMemo(() => {
+    return movies.filter((m) => m.has_watched === (viewMode === "watched"));
+  }, [movies, viewMode]);
+
+  const handleAdd = async (movie: TMDBMovie, rating: number, has_watched: boolean = true) => {
     if (!user) return;
     await supabase.from("watched_movies").insert({
       user_id: user.id,
@@ -53,9 +60,17 @@ const Index = () => {
       release_date: movie.release_date,
       tmdb_rating: movie.vote_average,
       user_rating: rating,
+      has_watched,
     });
     await fetchMovies();
   };
+
+  const handleToggleWatched = async (id: string, currentlyWatched: boolean) => {
+    await supabase.from("watched_movies").update({ has_watched: !currentlyWatched }).eq("id", id);
+    setMovies((prev) => prev.map((m) => m.id === id ? { ...m, has_watched: !currentlyWatched } : m));
+    if (selectedMovie?.id === id) setSelectedMovie((p) => p ? { ...p, has_watched: !currentlyWatched } : p);
+  };
+
 
   const handleRemove = async (id: string) => {
     await supabase.from("watched_movies").delete().eq("id", id);
@@ -92,7 +107,7 @@ const Index = () => {
           <div>
             <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">My Movies</h1>
             <p className="text-muted-foreground text-sm">
-              {movies.length} movie{movies.length !== 1 ? "s" : ""} watched
+              {filteredMovies.length} movie{filteredMovies.length !== 1 ? "s" : ""} {viewMode === "watched" ? "watched" : "to watch"}
             </p>
           </div>
         </div>
@@ -117,18 +132,44 @@ const Index = () => {
       </motion.header>
 
       {/* Search */}
-      <MovieSearch onAdd={handleAdd} watchedIds={watchedTmdbIds} />
+      <MovieSearch onAdd={handleAdd} watchedIds={watchedTmdbIds} watchlistIds={watchlistTmdbIds} />
+
+      {/* Toggle */}
+      <div className="flex justify-center mb-6">
+        <div className="bg-muted p-1 rounded-lg flex gap-1">
+          <button
+            onClick={() => setViewMode("watched")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+              viewMode === "watched"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Watched
+          </button>
+          <button
+            onClick={() => setViewMode("watchlist")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+              viewMode === "watchlist"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Want to Watch
+          </button>
+        </div>
+      </div>
 
       {/* Grid */}
-      {movies.length === 0 ? (
+      {filteredMovies.length === 0 ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20 space-y-4">
           <Film size={48} className="mx-auto text-muted-foreground/50" />
-          <p className="text-muted-foreground">No movies yet. Search and add your first one!</p>
+          <p className="text-muted-foreground">No movies yet in this list.</p>
         </motion.div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <AnimatePresence mode="popLayout">
-            {movies.map((movie, i) => (
+            {filteredMovies.map((movie, i) => (
               <MovieCard
                 key={movie.id}
                 movie={movie}
@@ -136,6 +177,7 @@ const Index = () => {
                 onRate={handleRate}
                 onClick={() => setSelectedMovie(movie)}
                 index={i}
+                onToggleWatched={() => handleToggleWatched(movie.id, movie.has_watched)}
               />
             ))}
           </AnimatePresence>

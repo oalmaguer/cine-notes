@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Search, Plus, Film, User, ArrowLeft, Clapperboard } from "lucide-react";
+import { Search, Plus, Film, User, ArrowLeft, Clapperboard, BookmarkPlus, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   searchMovies,
@@ -13,8 +13,9 @@ import {
 import { StarRating } from "./StarRating";
 
 interface MovieSearchProps {
-  onAdd: (movie: TMDBMovie, rating: number) => void;
+  onAdd: (movie: TMDBMovie, rating: number, has_watched: boolean) => void;
   watchedIds: Set<number>;
+  watchlistIds: Set<number>;
 }
 
 type Mode = "movie" | "actor";
@@ -24,7 +25,7 @@ interface SelectedActor {
   movies: TMDBMovie[];
 }
 
-export function MovieSearch({ onAdd, watchedIds }: MovieSearchProps) {
+export function MovieSearch({ onAdd, watchedIds, watchlistIds }: MovieSearchProps) {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<Mode>("movie");
   const [movieResults, setMovieResults] = useState<TMDBMovie[]>([]);
@@ -116,9 +117,18 @@ export function MovieSearch({ onAdd, watchedIds }: MovieSearchProps) {
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
-  const handleAdd = (movie: TMDBMovie) => {
+  const handleAddWatched = (movie: TMDBMovie) => {
     const rating = selectedRating[movie.id] || 3;
-    onAdd(movie, rating);
+    onAdd(movie, rating, true);
+    if (!selectedActor) {
+      setQuery("");
+      setMovieResults([]);
+      setIsOpen(false);
+    }
+  };
+
+  const handleAddWatchlist = (movie: TMDBMovie) => {
+    onAdd(movie, 0, false);
     if (!selectedActor) {
       setQuery("");
       setMovieResults([]);
@@ -188,6 +198,7 @@ export function MovieSearch({ onAdd, watchedIds }: MovieSearchProps) {
               ) : (
                 selectedActor.movies.map((movie) => {
                   const alreadyAdded = watchedIds.has(movie.id);
+                  const alreadyWatchlisted = watchlistIds.has(movie.id);
                   return (
                     <div
                       key={movie.id}
@@ -222,13 +233,24 @@ export function MovieSearch({ onAdd, watchedIds }: MovieSearchProps) {
                           </div>
                         )}
                       </div>
-                      <button
-                        onClick={() => handleAdd(movie)}
-                        disabled={alreadyAdded}
-                        className="flex-shrink-0 p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <Plus size={18} />
-                      </button>
+                      <div className="flex flex-col gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => handleAddWatchlist(movie)}
+                          disabled={alreadyWatchlisted || alreadyAdded}
+                          title="Want to Watch"
+                          className="p-1.5 rounded-lg bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <BookmarkPlus size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleAddWatched(movie)}
+                          disabled={alreadyAdded}
+                          title="Mark as Watched"
+                          className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Check size={16} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })
@@ -328,6 +350,7 @@ export function MovieSearch({ onAdd, watchedIds }: MovieSearchProps) {
             {mode === "movie" &&
               movieResults.map((movie) => {
                 const alreadyAdded = watchedIds.has(movie.id);
+                const alreadyWatchlisted = watchlistIds.has(movie.id);
                 return (
                   <div
                     key={movie.id}
@@ -362,13 +385,24 @@ export function MovieSearch({ onAdd, watchedIds }: MovieSearchProps) {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleAdd(movie)}
-                      disabled={alreadyAdded}
-                      className="flex-shrink-0 p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <Plus size={18} />
-                    </button>
+                    <div className="flex flex-col gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => handleAddWatchlist(movie)}
+                        disabled={alreadyWatchlisted || alreadyAdded}
+                        title="Want to Watch"
+                        className="p-1.5 rounded-lg bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <BookmarkPlus size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleAddWatched(movie)}
+                        disabled={alreadyAdded}
+                        title="Mark as Watched"
+                        className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <Check size={16} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}

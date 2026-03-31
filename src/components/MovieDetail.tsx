@@ -12,6 +12,7 @@ interface MovieDetailProps {
   userRating: number;
   onClose: () => void;
   onRate: (id: string, rating: number) => void;
+  readonly?: boolean;
 }
 
 interface Comment {
@@ -26,7 +27,7 @@ interface Comment {
   } | null;
 }
 
-export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate }: MovieDetailProps) {
+export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, readonly = false }: MovieDetailProps) {
   const { user } = useAuth();
   const [detail, setDetail] = useState<TMDBMovieDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -154,8 +155,8 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate }: 
                   </div>
                   {director && <p className="text-xs text-muted-foreground pt-1">Directed by <span className="text-foreground font-medium">{director.name}</span></p>}
                   <div className="pt-1">
-                    <p className="text-xs text-muted-foreground mb-1">Your rating</p>
-                    <StarRating rating={userRating} onRate={(r) => onRate(movieDbId, r)} size={18} />
+                    <p className="text-xs text-muted-foreground mb-1">{readonly ? "User's rating" : "Your rating"}</p>
+                    <StarRating rating={userRating} onRate={(r) => !readonly && onRate(movieDbId, r)} size={18} interactive={!readonly} />
                   </div>
                 </div>
               </div>
@@ -196,23 +197,25 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate }: 
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <MessageSquare size={14} /> Comments ({comments.length})
                 </h3>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
-                    placeholder="Add a comment..."
-                    className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50"
-                  />
-                  <button
-                    onClick={handleAddComment}
-                    disabled={!newComment.trim() || submitting}
-                    className="p-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-40 transition-opacity"
-                  >
-                    <Send size={16} />
-                  </button>
-                </div>
+                {!readonly && (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
+                      placeholder="Add a comment..."
+                      className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50"
+                    />
+                    <button
+                      onClick={handleAddComment}
+                      disabled={!newComment.trim() || submitting}
+                      className="p-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-40 transition-opacity"
+                    >
+                      <Send size={16} />
+                    </button>
+                  </div>
+                )}
                 <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin">
                   {comments.map((c) => {
                     const { url, initials } = getCommentAvatar(c);
@@ -237,7 +240,7 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate }: 
                           {/* Note: always use text content, never dangerouslySetInnerHTML */}
                           <p className="text-sm text-foreground">{c.content}</p>
                         </div>
-                        {isOwn && (
+                        {isOwn && !readonly && (
                           <button
                             onClick={() => handleDeleteComment(c.id)}
                             className="opacity-0 group-hover:opacity-100 text-destructive transition-opacity flex-shrink-0 mt-0.5"
