@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import PublicProfile from "./pages/PublicProfile.tsx";
+import Discover from "./pages/Discover.tsx";
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,7 @@ const App = () => (
         <HashRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/discover" element={<Discover />} />
             <Route path="/u/:username" element={<PublicProfile />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

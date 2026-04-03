@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Film, Clapperboard, LogOut } from "lucide-react";
+import { Film, Clapperboard, LogOut, Compass } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { MovieSearch } from "@/components/MovieSearch";
 import { MovieCard } from "@/components/MovieCard";
@@ -9,6 +10,7 @@ import { ProfilePage } from "@/components/ProfilePage";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { TMDBMovie, getPosterUrl } from "@/lib/tmdb";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface DBMovie {
   id: string;
@@ -24,11 +26,13 @@ interface DBMovie {
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useAuth();
+  const navigate = useNavigate();
   const [movies, setMovies] = useState<DBMovie[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<DBMovie | null>(null);
   const [previewTmdbMovie, setPreviewTmdbMovie] = useState<TMDBMovie | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [viewMode, setViewMode] = useState<"watched" | "watchlist">("watched");
+  const [sortBy, setSortBy] = useState<"date_added" | "release_date" | "user_rating" | "tmdb_rating">("date_added");
 
   const fetchMovies = useCallback(async () => {
     if (!user) return;
@@ -48,8 +52,19 @@ const Index = () => {
   const watchlistTmdbIds = useMemo(() => new Set(movies.filter(m => !m.has_watched).map(m => m.tmdb_id)), [movies]);
 
   const filteredMovies = useMemo(() => {
-    return movies.filter((m) => m.has_watched === (viewMode === "watched"));
-  }, [movies, viewMode]);
+    let result = movies.filter((m) => m.has_watched === (viewMode === "watched"));
+    result.sort((a, b) => {
+      if (sortBy === "release_date") {
+        return new Date(b.release_date || 0).getTime() - new Date(a.release_date || 0).getTime();
+      } else if (sortBy === "user_rating") {
+        return b.user_rating - a.user_rating;
+      } else if (sortBy === "tmdb_rating") {
+        return (b.tmdb_rating || 0) - (a.tmdb_rating || 0);
+      }
+      return 0; // default handles "date_added" since initial fetch is ordered by created_at desc
+    });
+    return result;
+  }, [movies, viewMode, sortBy]);
 
   const handleAdd = async (movie: TMDBMovie, rating: number, has_watched: boolean = true) => {
     if (!user) return;
@@ -114,6 +129,14 @@ const Index = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Discover button */}
+          <button
+            onClick={() => navigate("/discover")}
+            className="hidden sm:flex px-3 py-1.5 h-8 mr-2 items-center gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary font-medium text-sm rounded-lg transition-colors border border-primary/10"
+          >
+            <Compass size={16} /> Discover
+          </button>
+          
           {/* Profile avatar button */}
           <button
             onClick={() => setShowProfile(true)}
@@ -163,6 +186,20 @@ const Index = () => {
           >
             Want to Watch
           </button>
+        </div>
+        
+        <div className="ml-4">
+          <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+            <SelectTrigger className="w-[180px] bg-background">
+              <SelectValue placeholder="Sort By" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date_added">Date Added</SelectItem>
+              <SelectItem value="release_date">Release Date</SelectItem>
+              <SelectItem value="user_rating">Your Rating</SelectItem>
+              <SelectItem value="tmdb_rating">TMDB Rating</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

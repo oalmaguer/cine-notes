@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { User, Camera, Save, X, Edit2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +18,43 @@ export function ProfilePage({ onClose }: ProfilePageProps) {
     bio: profile?.bio ?? "",
   });
   const [error, setError] = useState("");
+  const [stats, setStats] = useState({ watched: 0, wantToWatch: 0, avgRating: 0 });
+
+  useEffect(() => {
+    async function loadStats() {
+      if (!user) return;
+      const { data } = await supabase
+        .from("watched_movies")
+        .select("has_watched, user_rating")
+        .eq("user_id", user.id);
+      
+      if (data) {
+        let watched = 0;
+        let wantToWatch = 0;
+        let totalRating = 0;
+        let ratedCount = 0;
+        
+        data.forEach((m) => {
+          if (m.has_watched) {
+            watched++;
+            if (m.user_rating > 0) {
+              totalRating += m.user_rating;
+              ratedCount++;
+            }
+          } else {
+            wantToWatch++;
+          }
+        });
+        
+        setStats({
+          watched,
+          wantToWatch,
+          avgRating: ratedCount ? (totalRating / ratedCount) : 0,
+        });
+      }
+    }
+    loadStats();
+  }, [user]);
 
   const handleSave = async () => {
     if (!user) return;
@@ -185,9 +222,24 @@ export function ProfilePage({ onClose }: ProfilePageProps) {
                 <p className="text-sm text-muted-foreground leading-relaxed">{profile.bio}</p>
               )}
               <div className="pt-2 border-t border-border mt-3">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground mb-4">
                   Signed in as <span className="text-foreground">{user?.email}</span>
                 </p>
+                
+                <div className="grid grid-cols-3 gap-2 mt-4">
+                  <div className="bg-muted p-3 rounded-xl text-center">
+                    <div className="text-2xl font-bold text-foreground">{stats.watched}</div>
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1 opacity-80">Watched</div>
+                  </div>
+                  <div className="bg-muted p-3 rounded-xl text-center">
+                    <div className="text-2xl font-bold text-foreground">{stats.wantToWatch}</div>
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1 opacity-80">Watchlist</div>
+                  </div>
+                  <div className="bg-muted p-3 rounded-xl text-center">
+                    <div className="text-2xl font-bold text-primary">{stats.avgRating.toFixed(1)}</div>
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1 opacity-80">Avg Rating</div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

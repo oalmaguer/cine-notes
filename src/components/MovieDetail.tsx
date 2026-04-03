@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, Film, Clock, Star, MessageSquare, Send, Trash2, User, Sparkles, Loader2, BookmarkPlus, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Link } from "react-router-dom";
 import { getMovieDetails, TMDBMovieDetail, getPosterUrl, getProfileUrl, TMDBMovie, searchMovies } from "@/lib/tmdb";
 import { StarRating } from "./StarRating";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +48,8 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
   const [submitting, setSubmitting] = useState(false);
   const [recommendations, setRecommendations] = useState<TMDBMovie[] | null>(null);
   const [isRecommending, setIsRecommending] = useState(false);
+  const [aiMatchInsight, setAiMatchInsight] = useState<string | null>(null);
+  const [isMatching, setIsMatching] = useState(false);
 
   const fetchComments = useCallback(async () => {
     if (!movieDbId) {
@@ -102,6 +105,36 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
   const handleDeleteComment = async (id: string) => {
     await supabase.from("movie_comments").delete().eq("id", id);
     await fetchComments();
+  };
+
+  const handleAIMatch = async () => {
+    if (!detail || !user) return;
+    setIsMatching(true);
+    try {
+      const { data: topMovies } = await supabase
+        .from("watched_movies")
+        .select("title")
+        .eq("user_id", user.id)
+        .gte("user_rating", 4)
+        .limit(5);
+
+      const topTitles = (topMovies || []).map(m => m.title);
+      
+      const { data, error } = await supabase.functions.invoke("ai-movie-match", {
+        body: { 
+          movieTitle: detail.title, 
+          movieOverview: detail.overview, 
+          userFavorites: topTitles 
+        }
+      });
+      if (error) throw error;
+      setAiMatchInsight(data.insight);
+    } catch (e) {
+      console.error(e);
+      setAiMatchInsight("Couldn't calculate the AI match right now.");
+    } finally {
+      setIsMatching(false);
+    }
   };
 
   const handleGetRecommendations = async () => {
@@ -246,9 +279,28 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
                 </div>
               )}
 
-              {/* AI Recommendations */}
+              {/* AI Recommendations & Match */}
               {!readonly && (
-                <div className="px-6 pb-4 pt-2">
+                <div className="px-6 pb-4 pt-2 space-y-4">
+                  {/* AI Match */}
+                  {aiMatchInsight ? (
+                    <div className="bg-primary/10 rounded-xl border border-primary/20 p-4">
+                      <h4 className="flex items-center gap-2 text-sm font-semibold text-primary mb-2">
+                        <Sparkles size={16} /> AI Match Insight
+                      </h4>
+                      <p className="text-sm text-foreground leading-relaxed">{aiMatchInsight}</p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleAIMatch}
+                      disabled={isMatching}
+                      className="flex items-center justify-center gap-2 w-full py-2.5 bg-secondary/80 hover:bg-secondary text-secondary-foreground rounded-xl font-medium transition-colors text-sm disabled:opacity-50"
+                    >
+                      {isMatching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                      Why you'll like this
+                    </button>
+                  )}
+
                   {!recommendations && !isRecommending ? (
                     <button
                       onClick={handleGetRecommendations}
@@ -374,7 +426,15 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline gap-2 mb-0.5">
-                            <span className="text-xs font-semibold text-foreground">{getCommentAuthor(c)}</span>
+                            <span className="text-xs font-semibold text-foreground">
+                              {c.profiles?.username ? (
+                                <Link to={`/u/${c.profiles.username}`} className="hover:underline text-primary">
+                                  {getCommentAuthor(c)}
+                                </Link>
+                              ) : (
+                                getCommentAuthor(c)
+                              )}
+                            </span>
                             <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                               {new Date(c.created_at).toLocaleDateString()}
                             </span>

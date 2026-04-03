@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { MovieCard } from "@/components/MovieCard";
 import { MovieDetail } from "@/components/MovieDetail";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface DBMovie {
   id: string;
@@ -35,6 +36,9 @@ export default function PublicProfile() {
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<"watched" | "watchlist">("watched");
   const [selectedMovie, setSelectedMovie] = useState<DBMovie | null>(null);
+  const { user } = useAuth();
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [submittingFollow, setSubmittingFollow] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -56,6 +60,16 @@ export default function PublicProfile() {
       }
       setProfile(profileData);
 
+      if (user) {
+        const { data: followData } = await supabase
+          .from("follows")
+          .select("follower_id")
+          .eq("follower_id", user.id)
+          .eq("following_id", profileData.id)
+          .maybeSingle();
+        setIsFollowing(!!followData);
+      }
+
       // Fetch movies
       const { data: moviesData } = await supabase
         .from("watched_movies")
@@ -68,11 +82,49 @@ export default function PublicProfile() {
     }
 
     loadData();
-  }, [username]);
+  }, [username, user]);
+
+  const handleFollowToggle = async () => {
+    if (!user || !profile) return;
+    setSubmittingFollow(true);
+    if (isFollowing) {
+      await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", profile.id);
+      setIsFollowing(false);
+    } else {
+      await supabase.from("follows").insert({ follower_id: user.id, following_id: profile.id });
+      setIsFollowing(true);
+    }
+    setSubmittingFollow(false);
+  };
 
   const filteredMovies = useMemo(() => {
     return movies.filter((m) => m.has_watched === (viewMode === "watched"));
   }, [movies, viewMode]);
+
+  const stats = useMemo(() => {
+    let watched = 0;
+    let wantToWatch = 0;
+    let totalRating = 0;
+    let ratedCount = 0;
+
+    movies.forEach((m) => {
+      if (m.has_watched) {
+        watched++;
+        if (m.user_rating > 0) {
+          totalRating += m.user_rating;
+          ratedCount++;
+        }
+      } else {
+        wantToWatch++;
+      }
+    });
+
+    return {
+      watched,
+      wantToWatch,
+      avgRating: ratedCount ? totalRating / ratedCount : 0,
+    };
+  }, [movies]);
 
   if (loading) {
     return (
@@ -99,27 +151,58 @@ export default function PublicProfile() {
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-4 md:gap-6 bg-card border border-border rounded-xl p-4 md:p-6 mb-8 relative"
+        className="flex flex-col md:flex-row items-start md:items-center gap-6 bg-card border border-border rounded-xl p-4 md:p-6 mb-8 relative"
       >
-        <button
-          onClick={() => navigate("/")}
-          className="hidden sm:block p-2 rounded-lg hover:bg-surface-hover text-muted-foreground hover:text-foreground transition-colors mr-2"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center border-2 border-border">
-          {profile.avatar_url ? (
-            <img src={profile.avatar_url} alt={profile.display_name} className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-xl md:text-2xl font-bold text-primary">
-              {profile.display_name?.slice(0, 2).toUpperCase() || profile.username.slice(0, 2).toUpperCase()}
-            </span>
-          )}
+        <div className="flex items-center gap-4 md:gap-6 flex-1 w-full">
+          <button
+            onClick={() => navigate("/")}
+            className="hidden sm:block p-2 rounded-lg hover:bg-surface-hover text-muted-foreground hover:text-foreground transition-colors mr-2"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center border-2 border-border">
+            {profile.avatar_url ? (
+              <img src={profile.avatar_url} alt={profile.display_name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xl md:text-2xl font-bold text-primary">
+                {profile.display_name?.slice(0, 2).toUpperCase() || profile.username.slice(0, 2).toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">{profile.display_name || profile.username}</h1>
+            <p className="text-muted-foreground text-sm">@{profile.username}</p>
+            {profile.bio && <p className="text-sm text-muted-foreground mt-2 max-w-xl">{profile.bio}</p>}
+            {user && user.id !== profile.id && (
+              <button
+                onClick={handleFollowToggle}
+                disabled={submittingFollow}
+                className={`mt-4 px-6 py-2 rounded-full font-medium text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 ${
+                  isFollowing 
+                    ? "bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border" 
+                    : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20"
+                }`}
+              >
+                {isFollowing ? "Following" : "Follow"}
+              </button>
+            )}
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">{profile.display_name || profile.username}</h1>
-          <p className="text-muted-foreground text-sm">@{profile.username}</p>
-          {profile.bio && <p className="text-sm text-muted-foreground mt-2 max-w-xl">{profile.bio}</p>}
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-3 gap-3 w-full md:w-auto md:ml-auto">
+          <div className="bg-muted/50 p-3 rounded-xl text-center border border-border/50">
+            <div className="text-xl md:text-2xl font-bold text-foreground">{stats.watched}</div>
+            <div className="text-[10px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1 opacity-80">Watched</div>
+          </div>
+          <div className="bg-muted/50 p-3 rounded-xl text-center border border-border/50">
+            <div className="text-xl md:text-2xl font-bold text-foreground">{stats.wantToWatch}</div>
+            <div className="text-[10px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1 opacity-80">Watchlist</div>
+          </div>
+          <div className="bg-muted/50 p-3 rounded-xl text-center border border-border/50">
+            <div className="text-xl md:text-2xl font-bold text-primary">{stats.avgRating.toFixed(1)}</div>
+            <div className="text-[10px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1 opacity-80">Avg Rating</div>
+          </div>
         </div>
       </motion.header>
 
