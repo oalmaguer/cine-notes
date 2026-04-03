@@ -35,6 +35,7 @@ const Index = () => {
     const { data } = await supabase
       .from("watched_movies")
       .select("id, tmdb_id, title, overview, poster_url, release_date, tmdb_rating, user_rating, has_watched")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     setMovies((data as DBMovie[]) || []);
   }, [user]);
