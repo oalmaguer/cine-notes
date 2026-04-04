@@ -75,20 +75,37 @@ export default function Discover() {
                className="bg-card border border-border rounded-xl p-4 md:p-6"
              >
                <div className="flex items-center gap-3 mb-4">
-                  {/* avatar */}
-                  <Link to={`/u/${activity.profiles?.username}`} className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0">
-                     {activity.profiles?.avatar_url ? (
-                       <img src={activity.profiles.avatar_url} className="w-full h-full object-cover" />
-                     ) : (
-                       <div className="w-full h-full flex items-center justify-center bg-primary/20 text-primary font-bold">
-                          {activity.profiles?.display_name?.slice(0, 2).toUpperCase() || activity.profiles?.username?.slice(0, 2).toUpperCase() || "UN"}
-                       </div>
-                     )}
-                  </Link>
+                  {activity.profiles?.username ? (
+                    <Link to={`/u/${activity.profiles.username}`} className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0 hover:ring-2 hover:ring-primary/40 transition-all">
+                       {activity.profiles?.avatar_url ? (
+                         <img src={activity.profiles.avatar_url} className="w-full h-full object-cover" />
+                       ) : (
+                         <div className="w-full h-full flex items-center justify-center bg-primary/20 text-primary font-bold">
+                            {activity.profiles?.display_name?.slice(0, 2).toUpperCase() || activity.profiles?.username?.slice(0, 2).toUpperCase() || "UN"}
+                         </div>
+                       )}
+                    </Link>
+                  ) : (
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0">
+                       {activity.profiles?.avatar_url ? (
+                         <img src={activity.profiles.avatar_url} className="w-full h-full object-cover" />
+                       ) : (
+                         <div className="w-full h-full flex items-center justify-center bg-primary/20 text-primary font-bold">
+                            {activity.profiles?.display_name?.slice(0, 2).toUpperCase() || "UN"}
+                         </div>
+                       )}
+                    </div>
+                  )}
                   <div>
-                     <Link to={`/u/${activity.profiles?.username}`} className="font-semibold text-foreground hover:underline">
-                        {activity.profiles?.display_name || activity.profiles?.username}
-                     </Link>
+                     {activity.profiles?.username ? (
+                       <Link to={`/u/${activity.profiles.username}`} className="font-semibold text-foreground hover:underline">
+                          {activity.profiles?.display_name || activity.profiles.username}
+                       </Link>
+                     ) : (
+                       <span className="font-semibold text-foreground">
+                          {activity.profiles?.display_name || "Anonymous User"}
+                       </span>
+                     )}
                      <span className="text-muted-foreground text-sm ml-2">watched a movie • {new Date(activity.created_at).toLocaleDateString()}</span>
                      {activity.user_rating > 0 && (
                         <div className="flex items-center gap-1.5 text-xs font-medium text-yellow-500 mt-1 bg-yellow-500/10 w-fit px-2 py-0.5 rounded-full">

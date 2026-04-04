@@ -132,9 +132,9 @@ const Index = () => {
           {/* Discover button */}
           <button
             onClick={() => navigate("/discover")}
-            className="hidden sm:flex px-3 py-1.5 h-8 mr-2 items-center gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary font-medium text-sm rounded-lg transition-colors border border-primary/10"
+            className="flex px-2 sm:px-3 py-1.5 h-8 mr-1 sm:mr-2 items-center gap-1 sm:gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary font-medium text-sm rounded-lg transition-colors border border-primary/10"
           >
-            <Compass size={16} /> Discover
+            <Compass size={16} /> <span className="hidden sm:inline">Discover</span>
           </button>
           
           {/* Profile avatar button */}
