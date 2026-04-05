@@ -27,7 +27,7 @@ export function MovieCard({ movie, onRemove, onRate, onClick, index, onToggleWat
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ delay: index * 0.05, duration: 0.3 }}
+      transition={{ delay: Math.min(index * 0.02, 0.15), duration: 0.15 }}
       className="group bg-card border border-border rounded-xl overflow-hidden hover:border-primary/30 transition-all duration-300 cursor-pointer"
       onClick={onClick}
     >

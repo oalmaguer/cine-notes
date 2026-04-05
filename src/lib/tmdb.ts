@@ -119,3 +119,14 @@ export async function getMovieDetails(tmdbId: number): Promise<TMDBMovieDetail |
   if (!res.ok) return null;
   return res.json();
 }
+
+export async function getRandomMovies(page = 1): Promise<TMDBMovie[]> {
+  const res = await proxyFetch("/discover/movie", { 
+    page: page.toString(),
+    sort_by: "popularity.desc",
+    "vote_count.gte": "100"
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.results ?? [];
+}

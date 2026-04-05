@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { Film, Clapperboard, LogOut, Compass } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { Film, Clapperboard, LogOut, Compass, Bookmark, BookmarkCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { MovieSearch } from "@/components/MovieSearch";
@@ -9,7 +9,7 @@ import { LoginPage } from "@/components/LoginPage";
 import { ProfilePage } from "@/components/ProfilePage";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { TMDBMovie, getPosterUrl } from "@/lib/tmdb";
+import { TMDBMovie, getPosterUrl, getRandomMovies } from "@/lib/tmdb";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface DBMovie {
@@ -31,8 +31,49 @@ const Index = () => {
   const [selectedMovie, setSelectedMovie] = useState<DBMovie | null>(null);
   const [previewTmdbMovie, setPreviewTmdbMovie] = useState<TMDBMovie | null>(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [viewMode, setViewMode] = useState<"watched" | "watchlist">("watched");
+  const [viewMode, setViewMode] = useState<"watched" | "watchlist" | "recommendations">("watched");
   const [sortBy, setSortBy] = useState<"date_added" | "release_date" | "user_rating" | "tmdb_rating">("date_added");
+  const [randomMovies, setRandomMovies] = useState<TMDBMovie[]>([]);
+  const [loadingRandom, setLoadingRandom] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const recPageRef = useRef(1);
+
+  const loadRandomMovies = async (append = false) => {
+    if (append) {
+      setLoadingMore(true);
+      try {
+        const nextPage = recPageRef.current + 1;
+        const movies = await getRandomMovies(nextPage);
+        recPageRef.current = nextPage;
+        setRandomMovies(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const newMovies = movies.filter(m => !existingIds.has(m.id));
+          return [...prev, ...newMovies];
+        });
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoadingMore(false);
+      }
+    } else {
+      setLoadingRandom(true);
+      try {
+        recPageRef.current = 1;
+        const movies = await getRandomMovies(1);
+        setRandomMovies(movies);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoadingRandom(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode === "recommendations" && randomMovies.length === 0) {
+      loadRandomMovies();
+    }
+  }, [viewMode]);
 
   const fetchMovies = useCallback(async () => {
     if (!user) return;
@@ -119,12 +160,12 @@ const Index = () => {
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between"
       >
-        <div className="flex items-center gap-3">
-          <Clapperboard className="text-primary" size={32} />
+        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate("/")}>
+          <Clapperboard className="text-primary group-hover:scale-110 transition-transform" size={32} />
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">My Movies</h1>
-            <p className="text-muted-foreground text-sm">
-              {filteredMovies.length} movie{filteredMovies.length !== 1 ? "s" : ""} {viewMode === "watched" ? "watched" : "to watch"}
+            <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight group-hover:text-primary transition-colors">My Movies</h1>
+            <p className="text-muted-foreground text-sm"> 
+              {viewMode === "recommendations" ? "Discover new films" : `${filteredMovies.length} movie${filteredMovies.length !== 1 ? "s" : ""} ${viewMode === "watched" ? "watched" : "to watch"}`}
             </p>
           </div>
         </div>
@@ -186,25 +227,130 @@ const Index = () => {
           >
             Want to Watch
           </button>
+          <button
+            onClick={() => setViewMode("recommendations")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+              viewMode === "recommendations"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Recommendations
+          </button>
         </div>
         
-        <div className="ml-4">
-          <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
-            <SelectTrigger className="w-[180px] bg-background">
-              <SelectValue placeholder="Sort By" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="date_added">Date Added</SelectItem>
-              <SelectItem value="release_date">Release Date</SelectItem>
-              <SelectItem value="user_rating">Your Rating</SelectItem>
-              <SelectItem value="tmdb_rating">TMDB Rating</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {viewMode !== "recommendations" && (
+          <div className="ml-4">
+            <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+              <SelectTrigger className="w-[180px] bg-background">
+                <SelectValue placeholder="Sort By" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date_added">Date Added</SelectItem>
+                <SelectItem value="release_date">Release Date</SelectItem>
+                <SelectItem value="user_rating">Your Rating</SelectItem>
+                <SelectItem value="tmdb_rating">TMDB Rating</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* Grid */}
-      {filteredMovies.length === 0 ? (
+      <AnimatePresence mode="wait">
+      <motion.div
+        key={viewMode}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.15 }}
+      >
+      {viewMode === "recommendations" ? (
+        loadingRandom ? (
+          <div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+        ) : randomMovies.length === 0 ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20 space-y-4">
+            <Film size={48} className="mx-auto text-muted-foreground/50" />
+            <p className="text-muted-foreground">No recommendations found.</p>
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <AnimatePresence mode="popLayout">
+              {randomMovies.map((movie, i) => {
+                const alreadyInWatchlist = watchlistTmdbIds.has(movie.id);
+                const alreadyWatched = watchedTmdbIds.has(movie.id);
+                return (
+                  <motion.div
+                    key={`rec-${movie.id}`}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ delay: Math.min(i * 0.02, 0.15), duration: 0.15 }}
+                    className="group bg-card border border-border rounded-xl overflow-hidden hover:border-primary/30 transition-all duration-300 flex flex-col"
+                  >
+                    <div
+                      className="aspect-[2/3] bg-muted relative overflow-hidden cursor-pointer"
+                      onClick={() => setPreviewTmdbMovie(movie)}
+                    >
+                      {getPosterUrl(movie.poster_path) ? (
+                        <img
+                          src={getPosterUrl(movie.poster_path)!}
+                          alt={movie.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Film size={40} className="text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3 space-y-2 flex flex-col flex-1">
+                      <div className="cursor-pointer" onClick={() => setPreviewTmdbMovie(movie)}>
+                        <h3 className="font-semibold text-sm truncate text-foreground">{movie.title}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐ {(movie.vote_average ?? 0).toFixed(1)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => !alreadyInWatchlist && !alreadyWatched && handleAdd(movie, 0, false)}
+                        disabled={alreadyInWatchlist || alreadyWatched}
+                        className={`mt-auto flex items-center gap-1.5 text-xs font-medium px-2 py-1.5 rounded-md transition-all w-full justify-center ${
+                          alreadyWatched
+                            ? "bg-green-500/10 text-green-600 cursor-default"
+                            : alreadyInWatchlist
+                            ? "bg-primary/10 text-primary cursor-default"
+                            : "bg-secondary text-secondary-foreground hover:bg-primary/10 hover:text-primary cursor-pointer"
+                        }`}
+                      >
+                        {alreadyWatched ? (
+                          <><BookmarkCheck size={13} /> Watched</>  
+                        ) : alreadyInWatchlist ? (
+                          <><BookmarkCheck size={13} /> In Watchlist</>
+                        ) : (
+                          <><Bookmark size={13} /> Want to Watch</>
+                        )}
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+            <div className="col-span-full flex flex-col items-center gap-3 mt-8">
+               {loadingMore && (
+                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+               )}
+               <button
+                 onClick={() => loadRandomMovies(true)}
+                 disabled={loadingMore}
+                 className="px-6 py-2.5 bg-secondary hover:bg-primary/10 hover:text-primary text-secondary-foreground font-medium rounded-lg transition-colors flex items-center gap-2 border border-border disabled:opacity-40"
+               >
+                 Load More
+               </button>
+            </div>
+          </div>
+        )
+      ) : filteredMovies.length === 0 ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20 space-y-4">
           <Film size={48} className="mx-auto text-muted-foreground/50" />
           <p className="text-muted-foreground">No movies yet in this list.</p>
@@ -226,6 +372,8 @@ const Index = () => {
           </AnimatePresence>
         </div>
       )}
+      </motion.div>
+      </AnimatePresence>
 
       {/* Detail Modal */}
       {selectedMovie && (
