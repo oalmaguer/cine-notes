@@ -12,6 +12,7 @@ export interface TMDBMovie {
   release_date: string;
   vote_average: number;
   genre_ids: number[];
+  media_type: "movie" | "tv";
 }
 
 export interface TMDBMovieDetail extends TMDBMovie {
@@ -72,10 +73,20 @@ async function proxyFetch(path: string, params: Record<string, string> = {}): Pr
 
 export async function searchMovies(query: string): Promise<TMDBMovie[]> {
   if (!query.trim()) return [];
-  const res = await proxyFetch("/search/movie", { query });
-  if (!res.ok) throw new Error("TMDB search failed");
+  const res = await proxyFetch("/search/multi", { query });
+  if (!res.ok) throw new Error("TMDB multi-search failed");
   const data = await res.json();
-  return data.results?.slice(0, 8) ?? [];
+  
+  // Filter for movies and TV shows, and normalize TV shows
+  return (data.results ?? [])
+    .filter((m: any) => m.media_type === "movie" || m.media_type === "tv")
+    .map((m: any) => ({
+      ...m,
+      media_type: m.media_type,
+      title: m.title ?? m.name,
+      release_date: m.release_date ?? m.first_air_date ?? "",
+    }))
+    .slice(0, 10);
 }
 
 export interface TMDBPerson {
@@ -114,19 +125,55 @@ export async function getPersonMovies(personId: number): Promise<TMDBMovie[]> {
     .slice(0, 20);
 }
 
-export async function getMovieDetails(tmdbId: number): Promise<TMDBMovieDetail | null> {
-  const res = await proxyFetch(`/movie/${tmdbId}`, { append_to_response: "credits" });
+export async function getMovieDetails(tmdbId: number, mediaType: "movie" | "tv" = "movie"): Promise<TMDBMovieDetail | null> {
+  const endpoint = mediaType === "movie" ? `/movie/${tmdbId}` : `/tv/${tmdbId}`;
+  const res = await proxyFetch(endpoint, { append_to_response: "credits" });
   if (!res.ok) return null;
-  return res.json();
+  const data = await res.json();
+  
+  // Normalize TV results to match the movie-focused detail shape
+  if (mediaType === "tv") {
+    return {
+      ...data,
+      title: data.name,
+      release_date: data.first_air_date,
+      runtime: data.episode_run_time?.[0] || null, // Take first episode runtime as a proxy
+    };
+  }
+  return data;
 }
 
 export async function getRandomMovies(page = 1): Promise<TMDBMovie[]> {
-  const res = await proxyFetch("/discover/movie", { 
-    page: page.toString(),
-    sort_by: "popularity.desc",
-    "vote_count.gte": "100"
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.results ?? [];
+  const params = { language: "en-US", page: page.toString() };
+
+  const [movieRes, tvRes] = await Promise.all([
+    proxyFetch("/trending/movie/day", params),
+    proxyFetch("/trending/tv/day", params),
+  ]);
+
+  const movieData = movieRes.ok ? await movieRes.json() : { results: [] };
+  const tvData    = tvRes.ok    ? await tvRes.json()    : { results: [] };
+
+  const movieResults: TMDBMovie[] = (movieData.results ?? []).map((item: any) => ({
+    ...item,
+    media_type: "movie" as const,
+  }));
+
+  // TV shows use `name` / `first_air_date` — normalize to TMDBMovie shape
+  const tvResults: TMDBMovie[] = (tvData.results ?? []).map((item: any) => ({
+    ...item,
+    media_type: "tv" as const,
+    title: item.title ?? item.name,
+    release_date: item.release_date ?? item.first_air_date ?? "",
+  }));
+
+  const combined = [...movieResults, ...tvResults];
+  
+  // Shuffle to mix movies and TV shows
+  for (let i = combined.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [combined[i], combined[j]] = [combined[j], combined[i]];
+  }
+
+  return combined;
 }

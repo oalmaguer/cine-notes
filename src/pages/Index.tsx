@@ -37,6 +37,7 @@ const Index = () => {
   const [loadingRandom, setLoadingRandom] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const recPageRef = useRef(1);
+  const seenMovieIds = useRef<Set<number>>(new Set());
 
   const loadRandomMovies = async (append = false) => {
     if (append) {
@@ -45,11 +46,9 @@ const Index = () => {
         const nextPage = recPageRef.current + 1;
         const movies = await getRandomMovies(nextPage);
         recPageRef.current = nextPage;
-        setRandomMovies(prev => {
-          const existingIds = new Set(prev.map(m => m.id));
-          const newMovies = movies.filter(m => !existingIds.has(m.id));
-          return [...prev, ...newMovies];
-        });
+        const newMovies = movies.filter(m => !seenMovieIds.current.has(m.id));
+        newMovies.forEach(m => seenMovieIds.current.add(m.id));
+        setRandomMovies(prev => [...prev, ...newMovies]);
       } catch (error) {
         console.error(error);
       } finally {
@@ -59,7 +58,9 @@ const Index = () => {
       setLoadingRandom(true);
       try {
         recPageRef.current = 1;
+        seenMovieIds.current = new Set();
         const movies = await getRandomMovies(1);
+        movies.forEach(m => seenMovieIds.current.add(m.id));
         setRandomMovies(movies);
       } catch (error) {
         console.error(error);
@@ -153,7 +154,7 @@ const Index = () => {
   if (!user) return <LoginPage />;
 
   return (
-    <div className="min-h-screen p-4 md:p-8 max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen p-4 md:p-8 max-w-6xl mx-auto space-y-8 overflow-x-hidden">
       {/* Header */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
@@ -205,8 +206,8 @@ const Index = () => {
       />
 
       {/* Toggle */}
-      <div className="flex justify-center mb-6">
-        <div className="bg-muted p-1 rounded-lg flex gap-1">
+      <div className="flex flex-col items-center gap-3 mb-6">
+        <div className="bg-muted p-1 rounded-lg flex gap-1 flex-wrap justify-center">
           <button
             onClick={() => setViewMode("watched")}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
@@ -240,19 +241,17 @@ const Index = () => {
         </div>
         
         {viewMode !== "recommendations" && (
-          <div className="ml-4">
-            <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
-              <SelectTrigger className="w-[180px] bg-background">
-                <SelectValue placeholder="Sort By" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="date_added">Date Added</SelectItem>
-                <SelectItem value="release_date">Release Date</SelectItem>
-                <SelectItem value="user_rating">Your Rating</SelectItem>
-                <SelectItem value="tmdb_rating">TMDB Rating</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+            <SelectTrigger className="w-[180px] bg-background">
+              <SelectValue placeholder="Sort By" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date_added">Date Added</SelectItem>
+              <SelectItem value="release_date">Release Date</SelectItem>
+              <SelectItem value="user_rating">Your Rating</SelectItem>
+              <SelectItem value="tmdb_rating">TMDB Rating</SelectItem>
+            </SelectContent>
+          </Select>
         )}
       </div>
 
@@ -309,7 +308,7 @@ const Index = () => {
                       <div className="cursor-pointer" onClick={() => setPreviewTmdbMovie(movie)}>
                         <h3 className="font-semibold text-sm truncate text-foreground">{movie.title}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐ {(movie.vote_average ?? 0).toFixed(1)}
+                          {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐ {(movie.vote_average ?? 0).toFixed(1)} · <span className="bg-primary/10 text-primary px-1 py-0.5 rounded text-[10px] font-bold uppercase">{movie.media_type}</span>
                         </p>
                       </div>
                       <button
@@ -340,13 +339,7 @@ const Index = () => {
                {loadingMore && (
                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                )}
-               <button
-                 onClick={() => loadRandomMovies(true)}
-                 disabled={loadingMore}
-                 className="px-6 py-2.5 bg-secondary hover:bg-primary/10 hover:text-primary text-secondary-foreground font-medium rounded-lg transition-colors flex items-center gap-2 border border-border disabled:opacity-40"
-               >
-                 Load More
-               </button>
+               
             </div>
           </div>
         )
@@ -394,6 +387,7 @@ const Index = () => {
       {previewTmdbMovie && (
         <MovieDetail
           tmdbId={previewTmdbMovie.id}
+          mediaType={previewTmdbMovie.media_type}
           userRating={0}
           onClose={() => setPreviewTmdbMovie(null)}
           onRate={handleRate}

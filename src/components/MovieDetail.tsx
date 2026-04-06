@@ -18,6 +18,7 @@ interface MovieDetailProps {
   watchedIds?: Set<number>;
   watchlistIds?: Set<number>;
   onPreview?: (movie: TMDBMovie) => void;
+  mediaType?: "movie" | "tv";
 }
 
 interface Comment {
@@ -39,7 +40,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, readonly = false, onAdd, watchedIds, watchlistIds, onPreview }: MovieDetailProps) {
+export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, readonly = false, onAdd, watchedIds, watchlistIds, onPreview, mediaType }: MovieDetailProps) {
   const { user } = useAuth();
   const [detail, setDetail] = useState<TMDBMovieDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +51,7 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
   const [isRecommending, setIsRecommending] = useState(false);
   const [aiMatchInsight, setAiMatchInsight] = useState<string | null>(null);
   const [isMatching, setIsMatching] = useState(false);
+  const [currentType, setCurrentType] = useState<"movie" | "tv">(mediaType || "movie");
 
   const fetchComments = useCallback(async () => {
     if (!movieDbId) {
@@ -85,9 +87,24 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
   }, [movieDbId]);
 
   useEffect(() => {
-    getMovieDetails(tmdbId).then((d) => { setDetail(d); setLoading(false); });
+    const fetchWithFallback = async () => {
+      setLoading(true);
+      // Try with currentType first
+      let d = await getMovieDetails(tmdbId, currentType);
+      
+      // If we didn't specify a type and movie failed, try TV
+      if (!d && !mediaType && currentType === "movie") {
+        d = await getMovieDetails(tmdbId, "tv");
+        if (d) setCurrentType("tv");
+      }
+      
+      setDetail(d);
+      setLoading(false);
+    };
+
+    fetchWithFallback();
     fetchComments();
-  }, [tmdbId, fetchComments]);
+  }, [tmdbId, currentType, mediaType, fetchComments]);
 
   const handleAddComment = async () => {
     if (!newComment.trim() || !user) return;
@@ -230,6 +247,9 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
                   {detail.tagline && <p className="text-sm text-primary italic">"{detail.tagline}"</p>}
                   <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                     <span>{detail.release_date?.slice(0, 4)}</span>
+                    {currentType === "tv" && (detail as any).number_of_seasons && (
+                      <span>{(detail as any).number_of_seasons} Season{ (detail as any).number_of_seasons !== 1 ? "s" : "" }</span>
+                    )}
                     {detail.runtime && <span className="flex items-center gap-1"><Clock size={12} /> {detail.runtime} min</span>}
                     <span className="flex items-center gap-1"><Star size={12} /> {detail.vote_average.toFixed(1)}</span>
                   </div>
@@ -279,28 +299,9 @@ export function MovieDetail({ tmdbId, movieDbId, userRating, onClose, onRate, re
                 </div>
               )}
 
-              {/* AI Recommendations & Match */}
+              {/* AI Recommendations */}
               {!readonly && (
                 <div className="px-6 pb-4 pt-2 space-y-4">
-                  {/* AI Match */}
-                  {aiMatchInsight ? (
-                    <div className="bg-primary/10 rounded-xl border border-primary/20 p-4">
-                      <h4 className="flex items-center gap-2 text-sm font-semibold text-primary mb-2">
-                        <Sparkles size={16} /> AI Match Insight
-                      </h4>
-                      <p className="text-sm text-foreground leading-relaxed">{aiMatchInsight}</p>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={handleAIMatch}
-                      disabled={isMatching}
-                      className="flex items-center justify-center gap-2 w-full py-2.5 bg-secondary/80 hover:bg-secondary text-secondary-foreground rounded-xl font-medium transition-colors text-sm disabled:opacity-50"
-                    >
-                      {isMatching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                      Why you'll like this
-                    </button>
-                  )}
-
                   {!recommendations && !isRecommending ? (
                     <button
                       onClick={handleGetRecommendations}

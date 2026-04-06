@@ -229,7 +229,7 @@ export function MovieSearch({ onAdd, watchedIds, watchlistIds, onPreview }: Movi
                             <p className="text-sm font-medium truncate text-foreground">{movie.title}</p>
                             <p className="text-xs text-muted-foreground">
                               {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐{" "}
-                              {movie.vote_average.toFixed(1)}
+                              {movie.vote_average.toFixed(1)} · <span className="bg-primary/10 text-primary px-1 py-0.5 rounded text-[10px] font-bold uppercase">{movie.media_type}</span>
                             </p>
                             {!alreadyAdded && (
                               <div className="mt-1" onClick={(e) => e.stopPropagation()}>
@@ -388,7 +388,7 @@ export function MovieSearch({ onAdd, watchedIds, watchlistIds, onPreview }: Movi
                           <p className="text-sm font-medium truncate text-foreground">{movie.title}</p>
                           <p className="text-xs text-muted-foreground">
                             {movie.release_date?.slice(0, 4) || "Unknown"} · ⭐{" "}
-                            {movie.vote_average.toFixed(1)}
+                            {movie.vote_average.toFixed(1)} · <span className="bg-primary/10 text-primary px-1 py-0.5 rounded text-[10px] font-bold uppercase">{movie.media_type}</span>
                           </p>
                           {!alreadyAdded && (
                             <div className="mt-1" onClick={(e) => e.stopPropagation()}>
